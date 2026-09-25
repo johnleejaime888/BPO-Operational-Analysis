@@ -1,35 +1,4 @@
-/*
-MySQL Analysis Questions
-Operations
-What is the total number of calls?
-What is the average daily call volume?
-Which account receives the most calls?
-Which team handles the most calls?
-Which shift has the highest call volume?
-Agent Performance
-Which agents handle the most calls?
-Which agents have the highest AHT?
-Which agents have the highest QA scores?
-Which agents have the highest CSAT?
-Which agents have the highest FCR?
-SLA
-What is the overall SLA achievement?
-Which team has the lowest SLA?
-Which shift has the highest SLA?
-Does high call volume affect SLA?
-Productivity
-Which team handles the most calls per agent?
-Which account has the highest AHT?
-Which channel has the highest AHT?
-Attendance
-Which team has the highest absenteeism?
-Does absenteeism affect SLA?
-Which shift has the highest late minutes?
-Customer Experience
-Which team has the highest CSAT?
-Does higher AHT result in higher CSAT?
-Does QA score correlate with CSAT?
-*/
+
 
 #OPERATION
 
