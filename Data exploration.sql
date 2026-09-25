@@ -234,5 +234,19 @@ WITH team_csat AS (
 )
 SELECT team, SUM(total_csat) AS total_csat1, round(AVG(avg_csat), 2) AS avg_csat FROM team_csat GROUP BY team ORDER BY avg_csat DESC ;
 
-Does higher AHT result in higher CSAT?
-Does QA score correlate with CSAT?
+# Does higher AHT result in higher CSAT?
+
+WITH aht_csat AS (
+	SELECT team, 
+    SUM(COALESCE(aht_seconds, 0)) AS total_aht_seconds,
+    SUM(COALESCE(csat_score, 0 )) AS total_csat_scores,
+    COUNT(1) AS total_count
+    FROM staging1 GROUP BY team
+)
+SELECT team, total_aht_seconds,
+ ROUND((total_aht_seconds / total_count), 2) AS avg_total_aht_seconds,
+ total_csat_scores,
+ ROUND((total_csat_scores / total_count), 2) AS avg_total_csat_scores
+ FROM aht_csat;
+
+
