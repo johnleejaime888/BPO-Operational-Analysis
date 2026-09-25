@@ -1,1 +1,1 @@
-# BPO-Operational-Analysis
+Checking Duplicates & Standardizing Data.sql
