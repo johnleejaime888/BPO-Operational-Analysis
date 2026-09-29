@@ -1,136 +1,215 @@
-use project3;
-
-CREATE TABLE staging
-LIKE bpo_operation_raw;
-
-INSERT INTO staging
-SELECT * FROM bpo_operation_raw;
-
-SELECT * FROM staging;
-
-# Checking Duplicates
-
-WITH duplicateCTE AS (
-	SELECT *,
-    ROW_NUMBER() OVER(PARTITION BY interaction_id) AS row_num FROM staging
-)
-SELECT * FROM duplicateCTE WHERE row_num > 1;
 
 
-# Standardizing Data
+/*In this process, I cleaned the raw data by identifying and fixing inconsistent data, including typos, extra spaces, improper formats, and negative values. 
+I also removed duplicate records to maintain data accuracy and ensure unique row counts.*/
 
-SELECT DISTINCT date FROM staging1;
+/* 
+Data Validation
+ - Duplicates Records
+ - I identified blank and negative values in the aht_seconds and csat_score columns and converted them to NULL to prevent invalid values from affecting the calculation of totals and other metrics.
+ - I identified missing values in the transferred and resolved_first_call columns and replaced them with "Unknown" to preserve the records without making assumptions about the correct values.
+ */
 
-SELECT * FROM staging1 WHERE date IS NULL;
-
-UPDATE staging1 SET date = NULL WHERE date = '';
-
--- Data Quality Finding: Some transaction records had missing transaction dates. These records were retained because the transaction details remained valid, but they were excluded from time-based analysis.
+/* SQL Function Used: 
+CTE Function, Windows Function, Argregated Function, CASE Function, CONCAT, LOCATE, UPPER, LOWER
+SUBSTRING, SUBSTRING_INDEX, SELECT, UPDATE, DELETE, WHERE, AS, GROUP BY */
 
 
 
-SELECT agent_id AS column_name, agent_id, COUNT(*) AS frequency  FROM staging GROUP BY agent_id
 
-UNION ALL
+# Cleaning and Standardizing Data
 
-SELECT agent_name, agent_name, COUNT(*)  FROM staging GROUP BY agent_name
-
-UNION ALL
-
-SELECT team, team, COUNT(*)  FROM staging GROUP BY team
-
-UNION ALL
-
-SELECT account, account, COUNT(*)  FROM staging GROUP BY account
-
-UNION ALL
-
-SELECT location, location, COUNT(*)  FROM staging GROUP BY location
-
-UNION ALL
-
-SELECT shift, shift, COUNT(*)  FROM staging GROUP BY shift
-
-UNION ALL
-
-SELECT channel, channel, COUNT(*)  FROM staging GROUP BY channel
-
-UNION ALL
-
-SELECT call_type, call_type, COUNT(*)  FROM staging GROUP BY call_type
-
-UNION ALL
-
-SELECT resolution_status, resolution_status, COUNT(*)  FROM staging GROUP BY resolution_status
-
-UNION ALL
-
-SELECT attendance_status, attendance_status, COUNT(*)  FROM staging GROUP BY attendance_status
-
-UNION ALL
-
-SELECT sla_met, sla_met, COUNT(*)  FROM staging GROUP BY sla_met
-
-UNION ALL
-
-SELECT fcr, fcr, COUNT(*)  FROM staging GROUP BY fcr
-
-ORDER BY column_name, frequency;
-
-
-SELECT * FROM staging;
-
-
-# VALIDATE Numbers
-
-WITH validate_num AS(
+WITH duplicate_data AS(
 SELECT *,
-	concat_ws(' ',
-	CASE WHEN handled_calls < 0 THEN 'Invalid handled calls' END,
-    CASE WHEN answered_calls < 0 THEN 'Invalid answered calls' END,
-    CASE WHEN abandoned_calls < 0 THEN 'Invalid abandoned calls' END,
-	CASE WHEN talk_time_minutes < 0 THEN 'Invalid talk_time_minutes' END,
-    CASE WHEN hold_time_minutes < 0 THEN 'Invalid hold_time_minutes' END,
-    CASE WHEN after_call_work < 0 THEN 'Invalid after_call_work'END,
-    CASE WHEN aht_seconds < 0 THEN 'Invalid AHT seconds' END,
-	CASE WHEN csat_score < 0 THEN 'Invalid CSAT Score'END,
-	CASE WHEN qa_score < 0 THEN 'Invalid QA Score'END,
-    CASE WHEN late_minutes < 0 THEN 'Invalid late_minutes'END,
-    CASE WHEN overtime_hours < 0 THEN 'Invalid Overtime hours'END
-
-    ) AS remarks
+	ROW_NUMBER() OVER(PARTITION BY call_id) AS row_num
 FROM staging
 )
-SELECT * FROM validate_num WHERE remarks <> '';
+SELECT * FROM duplicate_data;
 
-CREATE TABLE staging1
-LIKE staging;
+DELETE FROM staging1 WHERE row_num > 1;
 
-ALTER TABLE staging1
-ADD COLUMN remarks TEXt;
+SELECT agent_name, TRIM(agent_name),
+CASE 
+    -- Used the LOCATE() function to identify values containing extra spaces in the column. 
+    WHEN LOCATE(' ', TRIM(agent_name)) > 0 THEN
+        CONCAT(
+            -- First Name (Capital 1st letter + small 2nd letter onwards)
+            UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(agent_name), ' ', 1), 1, 1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(agent_name), ' ', 1), 2)),
+            ' ',
+            -- Second Name (Capital 1st letter + small 2nd letter onwards)
+            UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(agent_name), ' ', -1), 1, 1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(agent_name), ' ', -1), 2))
+        )
+    -- ELSE used if the value is 1 word.
+    ELSE
+        CONCAT(
+            UPPER(SUBSTRING(TRIM(agent_name), 1, 1)),
+            LOWER(SUBSTRING(TRIM(agent_name), 2))
+        )
+END AS clean_name
+FROM staging1;
 
-INSERT INTO staging1
-SELECT *,
-	concat_ws(' ',
-	CASE WHEN handled_calls < 0 THEN 'Invalid handled calls' END,
-    CASE WHEN answered_calls < 0 THEN 'Invalid answered calls' END,
-    CASE WHEN abandoned_calls < 0 THEN 'Invalid abandoned calls' END,
-	CASE WHEN talk_time_minutes < 0 THEN 'Invalid talk_time_minutes' END,
-    CASE WHEN hold_time_minutes < 0 THEN 'Invalid hold_time_minutes' END,
-    CASE WHEN after_call_work < 0 THEN 'Invalid after_call_work'END,
-    CASE WHEN aht_seconds < 0 THEN 'Invalid AHT seconds' END,
-	CASE WHEN csat_score < 0 THEN 'Invalid CSAT Score'END,
-	CASE WHEN qa_score < 0 THEN 'Invalid QA Score'END,
-    CASE WHEN late_minutes < 0 THEN 'Invalid late_minutes'END,
-    CASE WHEN overtime_hours < 0 THEN 'Invalid Overtime hours'END
+UPDATE staging1 SET agent_name = TRIM(agent_name);
 
-    ) AS remarks
-FROM staging;
+UPDATE staging1 SET agent_name = (SELECT
+CASE 
+    WHEN LOCATE(' ', agent_name) > 0 THEN
+        CONCAT(
+            -- First Name (Capital 1st letter + small 2nd letter onwards)
+            UPPER(SUBSTRING(SUBSTRING_INDEX(agent_name, ' ', 1), 1, 1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(agent_name, ' ', 1), 2)),
+            ' ',
+            -- Second Name (Capital 1st letter + small 2nd letter onwards)
+            UPPER(SUBSTRING(SUBSTRING_INDEX(agent_name, ' ', -1), 1, 1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(agent_name, ' ', -1), 2))
+        )
+    -- ELSE used if the values is 1 word.
+    ELSE
+        CONCAT(
+            UPPER(SUBSTRING(agent_name, 1, 1)),
+            LOWER(SUBSTRING(agent_name, 2))
+        )
+END);
 
 
-SELECT * FROM staging1 WHERE remarks <> '';
+SELECT DISTINCT(team), TRIM(team),
+	CASE
+		WHEN LOCATE(' ', TRIM(team)) > 0 THEN
+			CONCAT(
+            UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', 1),1 ,1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', 1), 2)),
+            ' ',
+            UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', -1), 1, 1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', -1), 2))
+            
+            )
+            
+		ELSE
+        
+			CONCAT (
+			UPPER(SUBSTRING(TRIM(team), 1, 1)),
+            LOWER(SUBSTRING(TRIM(team), 2))
+            )
+			
+    END AS clean_team
+FROM staging1;
 
-UPDATE staging1 SET aht_seconds = NULL WHERE remarks <> '';
 
--- AHT Validation: Identified negative AHT values as invalid records. Since no datetime fields were available to validate the correct duration, negative values were excluded from AHT calculations rather than converted to positive values.
+UPDATE staging1 SET team =
+	CASE
+		WHEN LOCATE(' ', TRIM(team)) > 0 THEN
+			CONCAT(
+            UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', 1),1 ,1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', 1), 2)),
+            ' ',
+            UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', -1), 1, 1)),
+            LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(team), ' ', -1), 2))
+            
+            )
+            
+		ELSE
+        
+			CONCAT (
+			UPPER(SUBSTRING(TRIM(team), 1, 1)),
+            LOWER(SUBSTRING(TRIM(team), 2))
+			)
+			
+    END;
+    
+    SELECT customer_name, TRIM(customer_name),
+	CASE
+		WHEN LOCATE(' ', TRIM(customer_name)) > 0 THEN
+			CONCAT(
+				UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', 1), 1, 1)),
+                LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', 1), 2)),
+                ' ',
+                UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', -1), 1, 1)),
+                LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', -1), 2))
+            )
+		ELSE
+			CONCAT(
+				UPPER(SUBSTRING(TRIM(customer_name), 1, 1)),
+				LOWER(SUBSTRING(TRIM(customer_name), 2))
+            )
+    END AS clean_name
+FROM staging1;
+
+UPDATE staging1 SET customer_name =
+	CASE
+		WHEN LOCATE(' ', TRIM(customer_name)) > 0 THEN
+			CONCAT(
+				UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', 1), 1, 1)),
+                LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', 1), 2)),
+                ' ',
+                UPPER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', -1), 1, 1)),
+                LOWER(SUBSTRING(SUBSTRING_INDEX(TRIM(customer_name),' ', -1), 2))
+            )
+		ELSE
+			CONCAT(
+				UPPER(SUBSTRING(TRIM(customer_name), 1, 1)),
+				LOWER(SUBSTRING(TRIM(customer_name), 2))
+            )
+    END;
+    
+UPDATE staging1 
+	SET call_type = 
+		CASE
+			WHEN LOWER(call_type) = 'outbound' THEN 'Outbound'
+			WHEN LOWER(call_type) = 'inbound'  THEN 'Inbound'
+			ELSE call_type  -- keeps original value kung hindi na-match
+		END;
+        
+SELECT DISTINCT(queue) FROM staging1;
+
+SELECT transferred, count(*) FROM staging1 GROUP BY transferred;
+
+UPDATE staging1 SET transferred = 
+	CASE
+		WHEN transferred = 'NO' THEN 'No'
+        WHEN transferred = 'YES' THEN 'Yes'
+        WHEN transferred = 'UNKNOWN' THEN 'Unknown'
+        WHEN transferred = 0 THEN 'UNKNOWN'
+        WHEN transferred = '' THEN 'UNKNOWN'
+    END;
+    
+    SELECT DISTINCT(resolved_first_call), count(*) FROM staging1 GROUP BY resolved_first_call;
+    
+    UPDATE staging1 SET resolved_first_call = 
+	CASE
+		WHEN resolved_first_call = 'N' THEN 'No'
+        WHEN resolved_first_call = 'Y' THEN 'Yes'
+        WHEN resolved_first_call = ' ' THEN 'Unknown'
+    END;
+    
+    SELECT DISTINCT (sentiment) FROM staging1;
+    
+    SELECT DISTINCT (escalated), count(*) FROM staging1 GROUP BY escalated;
+    
+    UPDATE staging1 SET escalated = 
+	CASE
+		WHEN escalated = 'N' THEN 'No'
+        WHEN escalated = 'Y' THEN 'Yes'
+        WHEN escalated = ' ' THEN 'Unknown'
+    END;
+    
+SELECT DISTINCT (language) FROM staging1;
+
+SELECT DISTINCT(region) FROM staging1;
+
+SELECT DISTINCT(disposition_code) FROM staging1;
+
+/* I identified blank and negative values in the aht_seconds, hold_time_seconds,
+   and wait_time_seconds columns to determine which records required cleaning.  */
+
+SELECT * FROM staging1 WHERE aht_seconds < 0 OR hold_time_seconds < 0 OR wait_time_seconds < 0 OR csat_score = '';
+
+UPDATE staging1 SET csat_score = NULL WHERE csat_score = '';
+
+
+SELECT * FROM staging1
+
+
+
+
 
